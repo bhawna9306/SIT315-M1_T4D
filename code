@@ -1,0 +1,76 @@
+#include <avr/io.h>
+#include <avr/interrupt.h>
+
+const int PIR_SENSOR_PIN1 = 2;          // Digital input pin for PIR sensor 1
+const int PIR_SENSOR_PIN2 = 3;          // Digital input pin for PIR sensor 2
+const int PIR_SENSOR_PIN3 = 4;          // Digital input pin for PIR sensor 3
+const int PIR_SENSOR_PIN4 = 5;          // Digital input pin for PIR sensor 4
+const int PIR_LED_PIN = 13;             // Digital output pin for PIR sensor LED
+const int PIR_LED_PIN2 = 12;            // Digital output pin for PIR sensor 2 LED
+const int PIR_LED_PIN3 = 11;            // Digital output pin for PIR sensor 3 LED
+const int PIR_LED_PIN4 = 10;            // Digital output pin for PIR sensor 4 LED
+
+volatile bool motionDetected[4] = {false, false, false, false};
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(PIR_SENSOR_PIN1, INPUT);
+  pinMode(PIR_SENSOR_PIN2, INPUT);
+  pinMode(PIR_SENSOR_PIN3, INPUT);
+  pinMode(PIR_SENSOR_PIN4, INPUT);
+  pinMode(PIR_LED_PIN, OUTPUT);
+  pinMode(PIR_LED_PIN2, OUTPUT);
+  pinMode(PIR_LED_PIN3, OUTPUT);
+  pinMode(PIR_LED_PIN4, OUTPUT);
+
+  // Enable Pin Change Interrupts for pins 2, 3, 4, and 5
+  PCMSK2 |= (1 << PCINT18) | (1 << PCINT19) | (1 << PCINT20) | (1 << PCINT21);
+  PCICR |= (1 << PCIE2); // Enable PCINT for port D
+  sei(); // Enable global interrupts
+
+  // Set up timer interrupt
+  TCCR1A = 0; // Set entire TCCR1A register to 0
+  TCCR1B = 0; 
+  TCNT1 = 0; // Initialize counter value to 0
+  OCR1A = 15624; // Set compare match register for 1s interrupt at 16MHz
+  TCCR1B |= (1 << WGM12); // Turn on CTC mode
+  TCCR1B |= (1 << CS12) | (1 << CS10); // Set prescaler to 1024 and start the timer
+  TIMSK1 |= (1 << OCIE1A); // Enable timer compare interrupt
+}
+
+void loop() {
+  
+}
+
+void checkAndHandleFlags() {
+  digitalWrite(PIR_LED_PIN, motionDetected[0] ? HIGH : LOW);
+  digitalWrite(PIR_LED_PIN2, motionDetected[1] ? HIGH : LOW);
+  digitalWrite(PIR_LED_PIN3, motionDetected[2] ? HIGH : LOW);
+  digitalWrite(PIR_LED_PIN4, motionDetected[3] ? HIGH : LOW);
+  if (motionDetected[0] || motionDetected[1] || motionDetected[2] || motionDetected[3]) {
+    Serial.println("Motion detected!");
+  }
+  // Reset all motion detection flags
+  for (int i = 0; i < 4; ++i) {
+    motionDetected[i] = false;
+  }
+}
+
+ISR(PCINT2_vect) {
+  if (digitalRead(PIR_SENSOR_PIN1)) {
+    motionDetected[0] = true;
+  }
+  if (digitalRead(PIR_SENSOR_PIN2)) {
+    motionDetected[1] = true;
+  }
+  if (digitalRead(PIR_SENSOR_PIN3)) {
+    motionDetected[2] = true;
+  }
+  if (digitalRead(PIR_SENSOR_PIN4)) {
+    motionDetected[3] = true;
+  }
+}
+
+ISR(TIMER1_COMPA_vect) {
+  checkAndHandleFlags();
+}
